@@ -10,7 +10,7 @@ class Task extends Model
 {
     protected $fillable = [
         'title',
-        'description',
+        'content',
         'status',
         'is_sub_task',
         'parent_task_id',

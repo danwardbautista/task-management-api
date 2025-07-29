@@ -16,7 +16,7 @@ return new class extends Migration
             // Tasks main columns
             $table->id();
             $table->string('title');
-            $table->text('description')->nullable();
+            $table->text('content')->nullable();
             $table->enum('status', ['to-do', 'in-progress', 'done'])->default('to-do');
             $table->timestamps();
 
