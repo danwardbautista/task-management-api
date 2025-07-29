@@ -32,9 +32,6 @@ class TaskRequest extends FormRequest
             'title'    => $isCreating ? 'required|string|max:255' : 'sometimes|required|string|max:255',
             'content'  => 'nullable|string',
             'status'   => 'nullable|string|in:to-do,in-progress,done',
-            'user_id'  => 'nullable|exists:users,id',
-            
-           
         ];
     }
 
@@ -45,7 +42,6 @@ class TaskRequest extends FormRequest
             'title.required' => 'Task title is required.',
             'title.max' => 'Task title cannot exceed 255 characters.',
             'status.in' => 'Status must be one of: to-do, in-progress, done.',
-            'user_id.exists' => 'The selected user does not exist.',
             'search.max' => 'Search term cannot exceed 100 characters.',
             'search.regex' => 'Search term contains invalid characters.',
             'sort_by.in' => 'Sort field must be either title or created_at.',

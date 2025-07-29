@@ -5,10 +5,13 @@ namespace App\Http\Controllers;
 use Illuminate\Support\Facades\Log;
 use App\Http\Requests\TaskRequest;
 use App\Http\Responses\ApiResponse;
+use App\Services\AuditLogger;
 use App\Models\Task;
 
 class TaskController extends Controller
 {
+    public function __construct(private AuditLogger $auditLogger) {}
+
     public function index(TaskRequest $request)
     {
         try {
@@ -44,13 +47,12 @@ class TaskController extends Controller
             $perPage = $request->input('per_page', 10);
             $tasks = $query->paginate($perPage);
 
-            return ApiResponse::success('Tasks retrieved successfully', $tasks); //decide later regarding http status code
+            $this->auditLogger->logSuccess('tasks.index', ['count' => $tasks->count()]);
+
+            return ApiResponse::success('Tasks retrieved successfully', $tasks);
             
         } catch (\Exception $e) {
-            Log::error('TaskController@index failed', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
+            $this->auditLogger->logError('tasks.index', $e);
 
             return ApiResponse::error('The application encountered an error while retrieving tasks. Please try again later.');
         }
@@ -59,21 +61,19 @@ class TaskController extends Controller
     public function store(TaskRequest $request)
     {
         try {
-            // Create task with validated data
+            // Create task with validated data - user_id auto-set by model
             $task = Task::create([
                 'title'    => $request->input('title'),
                 'content'  => $request->input('content'),
                 'status'   => $request->input('status', 'to-do'),
-                'user_id'  => $request->input('user_id'),
             ]);
+
+            $this->auditLogger->logSuccess('tasks.store', ['task_id' => $task->id, 'title' => $task->title]);
 
             return ApiResponse::success('Task created successfully', $task, 201);
 
         } catch (\Exception $e) {
-            Log::error('TaskController@store failed', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
+            $this->auditLogger->logError('tasks.store', $e);
 
             return ApiResponse::error('The application encountered an error while creating the task. Please try again later.');
         }
@@ -82,21 +82,20 @@ class TaskController extends Controller
     public function update(TaskRequest $request, Task $task)
     {
         try {
+            // Update task fields except user_id to prevent ownership changes
             $task->update([
                 'title'    => $request->input('title', $task->title),
                 'content'  => $request->input('content', $task->content),
                 'status'   => $request->input('status', $task->status),
-                'user_id'  => $request->input('user_id', $task->user_id),
             ]);
 
-            return ApiResponse::success('Task updated successfully', $task->fresh());
+            $updatedTask = $task->fresh();
+            $this->auditLogger->logSuccess('tasks.update', ['task_id' => $task->id, 'title' => $task->title]);
+
+            return ApiResponse::success('Task updated successfully', $updatedTask);
 
         } catch (\Exception $e) {
-            Log::error('TaskController@update failed', [
-                'task_id' => $task->id, //id and title or just id, decie later
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
+            $this->auditLogger->logError('tasks.update', $e, ['task_id' => $task->id]);
 
             return ApiResponse::error('The application encountered an error while updating the task. Please try again later.');
         }
@@ -109,13 +108,11 @@ class TaskController extends Controller
                 'deleted_at' => now(),
             ]);
 
+            $this->auditLogger->logSuccess('tasks.destroy', ['task_id' => $task->id, 'title' => $task->title]);
+
             return ApiResponse::success('Task moved to trash successfully');
         } catch (\Exception $e) {
-            Log::error('TaskController@destroy failed', [
-                'task_id' => $task->id,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
+            $this->auditLogger->logError('tasks.destroy', $e, ['task_id' => $task->id]);
 
             return ApiResponse::error('The application encountered an error while deleting the task. Please try again later.');
         }

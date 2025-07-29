@@ -14,7 +14,6 @@ class Task extends Model
         'status',
         'is_sub_task',
         'parent_task_id',
-        'user_id', // remember to remove null later on auth
         'deleted_at',
         'permanent_delete_at',
     ];
@@ -25,8 +24,19 @@ class Task extends Model
         'permanent_delete_at' => 'datetime',
     ];
 
+    // Auto set user_id to authenticated user when creating a task
+    protected static function boot()
+    {
+        parent::boot();
+        
+        static::creating(function ($task) {
+            if (!$task->user_id) {
+                $task->user_id = auth()->id();
+            }
+        });
+    }
 
-    // force later on auth
+    // delete this if not needed later
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
