@@ -21,7 +21,7 @@ return new class extends Migration
             $table->timestamps();
 
             // User reference stuff
-            $table->unsignedBigInteger('user_id')->nullable(); //remove null later on auth
+            $table->unsignedBigInteger('user_id')->nullable(); // null allowed for deactivated users
             $table->foreign('user_id')->references('id')->on('users')->onDelete('set null');
 
             // Sub tasks columns 

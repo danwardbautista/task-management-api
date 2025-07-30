@@ -12,6 +12,7 @@ class Task extends Model
         'title',
         'content',
         'status',
+        'user_id',
         'is_sub_task',
         'parent_task_id',
         'deleted_at',
@@ -50,5 +51,42 @@ class Task extends Model
     public function subTasks(): HasMany
     {
         return $this->hasMany(Task::class, 'parent_task_id');
+    }
+
+    // Progress calculation for main tasks only
+    // Need to check this stuff better
+    public function getProgressAttribute(): array
+    {
+        // Eager loaded relation check if available
+        if ($this->relationLoaded('subTasks')) {
+            $subtasks = $this->subTasks;
+        } else {
+            $subtasks = $this->subTasks()
+                ->whereNull('deleted_at')
+                ->whereNull('permanent_delete_at')
+                ->get();
+        }
+
+        $total = $subtasks->count();
+        $completed = $subtasks->where('status', 'done')->count();
+        $percentage = $total > 0 ? round(($completed / $total) * 100, 2) : 0;
+
+        return [
+            'completed' => $completed,
+            'total' => $total,
+            'percentage' => $percentage
+        ];
+    }
+
+    // Progress only for main tasks
+    protected function getArrayableAppends()
+    {
+        $appends = parent::getArrayableAppends();
+        
+        if (!$this->is_sub_task) {
+            $appends[] = 'progress';
+        }
+        
+        return $appends;
     }
 }

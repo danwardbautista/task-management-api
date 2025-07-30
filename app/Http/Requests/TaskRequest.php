@@ -31,7 +31,7 @@ class TaskRequest extends FormRequest
             // Rules for Task controller
             'title'    => $isCreating ? 'required|string|max:255' : 'sometimes|required|string|max:255',
             'content'  => 'nullable|string',
-            'status'   => 'nullable|string|in:to-do,in-progress,done',
+            'status'   => 'sometimes|required|string|in:to-do,in-progress,done',
         ];
     }
 

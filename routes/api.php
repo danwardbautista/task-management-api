@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\SubtaskController;
 use App\Http\Controllers\TaskController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -28,7 +29,7 @@ Route::controller(AuthController::class)
         // Public auth
         Route::post('/register', 'register')->name('register'); //decide later regarding rate limit
         Route::post('/login', 'login')->name('login');
-        
+
         // Authenticated routes
         Route::middleware('auth:sanctum')->group(function () {
             Route::post('/logout', 'logout')->name('logout');
@@ -44,6 +45,20 @@ Route::controller(TaskController::class)
     ->group(function () {
         Route::get('/', 'index')->name('index');
         Route::post('/', 'store')->name('store');
+        Route::get('/{task}', 'show')->name('show');
         Route::put('/{task}', 'update')->name('update');
         Route::delete('/{task}', 'destroy')->name('destroy');
+    });
+
+// Subtask routes group
+Route::controller(SubtaskController::class)
+    ->middleware('auth:sanctum')
+    ->prefix('tasks/{task}/subtasks')
+    ->name('subtasks.')
+    ->group(function () {
+        Route::get('/', 'index')->name('index');
+        Route::post('/', 'store')->name('store');
+        Route::get('/{subtask}', 'show')->name('show');
+        Route::put('/{subtask}', 'update')->name('update');
+        Route::delete('/{subtask}', 'destroy')->name('destroy');
     });
