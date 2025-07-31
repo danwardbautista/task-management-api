@@ -17,6 +17,7 @@ class TaskRequest extends FormRequest
     public function rules(): array
     {
         $isCreating = $this->isMethod('POST');
+        $isUpdating = $this->isMethod('PUT') || $this->isMethod('PATCH');
         $taskId = $this->route('task'); // Get task ID for update operations
 
         return [
@@ -28,11 +29,14 @@ class TaskRequest extends FormRequest
             'per_page'   => 'nullable|integer|min:1|max:100',
             'status_filter' => 'nullable|string|in:to-do,in-progress,done',
 
-            // Rules for Task controller - title must be unique per user
-            'title'      => $isCreating 
-                ? 'required|string|max:100|unique:tasks,title,NULL,id,user_id,' . auth()->id() . ',deleted_at,NULL'
-                : 'sometimes|required|string|max:100|unique:tasks,title,' . $taskId . ',id,user_id,' . auth()->id() . ',deleted_at,NULL',
-            'content'    => 'required|string',
+            // Rules for Task controller - title must be unique per user (only for POST/PUT requests)
+            // Exclude permanently deleted tasks from uniqueness check
+            'title'      => ($isCreating || $isUpdating) ? (
+                $isCreating 
+                    ? 'required|string|max:100|unique:tasks,title,NULL,id,user_id,' . auth()->id() . ',permanent_delete_at,NULL'
+                    : 'sometimes|required|string|max:100|unique:tasks,title,' . $taskId . ',id,user_id,' . auth()->id() . ',permanent_delete_at,NULL'
+            ) : 'nullable|string|max:100',
+            'content'    => ($isCreating || $isUpdating) ? 'required|string' : 'nullable|string',
             'task_image' => 'nullable|image|mimes:jpeg,jpg,png,gif,webp|max:4096',
             'status'     => 'sometimes|required|string|in:to-do,in-progress,done',
             'task_state' => 'sometimes|string|in:draft,published',

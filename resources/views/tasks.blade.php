@@ -167,6 +167,9 @@
         <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-2xl max-h-screen overflow-y-auto">
             <h2 id="modalTitle" class="text-2xl font-bold mb-4">Add New Task</h2>
             
+            <!-- Modal Error display container -->
+            <div id="modalErrorMessage" class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4 hidden"></div>
+            
             <form id="taskForm" class="space-y-4">
                 <input type="hidden" id="taskId">
                 <input type="hidden" id="parentTaskId">
@@ -349,6 +352,18 @@
 
     function hideError() {
         errorMessage.classList.add('hidden');
+    }
+
+    // Modal-specific error functions
+    function showModalError(message) {
+        const modalErrorMessage = document.getElementById('modalErrorMessage');
+        modalErrorMessage.textContent = message;
+        modalErrorMessage.classList.remove('hidden');
+    }
+
+    function hideModalError() {
+        const modalErrorMessage = document.getElementById('modalErrorMessage');
+        modalErrorMessage.classList.add('hidden');
     }
 
     function showSuccess(message) {
@@ -694,6 +709,9 @@
         document.getElementById('isSubtask').value = type === 'subtask' ? 'true' : 'false';
         document.getElementById('currentImage').classList.add('hidden');
         
+        // Hide any previous modal errors
+        hideModalError();
+        
         // Set modal title and button text
         if (type === 'subtask') {
             modalTitle.textContent = mode === 'edit' ? 'Edit Subtask' : 'Add New Subtask';
@@ -838,10 +856,10 @@
                     showSuccess(isEditing ? 'Task updated successfully' : 'Task created successfully');
                 }
             } else {
-                showError(result.message || `Failed to save ${isSubtaskForm ? 'subtask' : 'task'}`);
+                showModalError(result.message || `Failed to save ${isSubtaskForm ? 'subtask' : 'task'}`);
             }
         } catch (error) {
-            showError('Network error. Please try again.');
+            showModalError('Network error. Please try again.');
         } finally {
             saveBtn.disabled = false;
             saveBtn.textContent = originalText;
