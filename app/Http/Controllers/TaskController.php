@@ -6,6 +6,7 @@ use App\Http\Requests\TaskRequest;
 use App\Http\Responses\ApiResponse;
 use App\Services\AuditLogger;
 use App\Models\Task;
+use Illuminate\Support\Facades\Storage;
 
 class TaskController extends Controller
 {
@@ -88,12 +89,20 @@ class TaskController extends Controller
     public function store(TaskRequest $request)
     {
         try {
+            $taskData = [
+                'title'      => $request->input('title'),
+                'content'    => $request->input('content'),
+                'status'     => $request->input('status', 'to-do'),
+                'task_state' => $request->input('task_state', 'draft'),
+            ];
+
+            // Handle image upload request
+            if ($request->hasFile('task_image')) {
+                $taskData['task_image'] = $request->file('task_image')->store('task_images', 'public');
+            }
+
             // Create task with validated data - user_id auto-set by model
-            $task = Task::create([
-                'title'    => $request->input('title'),
-                'content'  => $request->input('content'),
-                'status'   => $request->input('status', 'to-do'), //redundant stuff
-            ]);
+            $task = Task::create($taskData);
 
             $this->auditLogger->logSuccess('tasks.store', ['task_id' => $task->id, 'title' => $task->title]);
 
@@ -116,11 +125,33 @@ class TaskController extends Controller
             }
 
             // Update task fields except user_id to prevent ownership changes
-            $task->update([
-                'title'    => $request->input('title', $task->title),
-                'content'  => $request->input('content', $task->content),
-                'status'   => $request->input('status', $task->status),
-            ]);
+            $updateData = [
+                'title'   => $request->input('title', $task->title),
+                'content' => $request->input('content', $task->content),
+                'status'  => $request->input('status', $task->status),
+            ];
+
+            // Handle image upload or removal
+            if ($request->hasFile('task_image')) {
+                // Delete old image if exists
+                if ($task->task_image) {
+                    Storage::disk('public')->delete($task->task_image);
+                }
+                $updateData['task_image'] = $request->file('task_image')->store('task_images', 'public');
+            } elseif ($request->has('task_image') && $request->input('task_image') === null) {
+                // Delete file and set column to null
+                if ($task->task_image) {
+                    Storage::disk('public')->delete($task->task_image);
+                }
+                $updateData['task_image'] = null;
+            }
+
+            // Only allow task_state updates for main tasks
+            if (!$task->is_sub_task && $request->has('task_state')) {
+                $updateData['task_state'] = $request->input('task_state');
+            }
+
+            $task->update($updateData);
 
             $updatedTask = $task->fresh();
             $this->auditLogger->logSuccess('tasks.update', ['task_id' => $task->id, 'title' => $task->title]);

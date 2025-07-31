@@ -11,7 +11,9 @@ class Task extends Model
     protected $fillable = [
         'title',
         'content',
+        'task_image',
         'status',
+        'task_state',
         'user_id',
         'is_sub_task',
         'parent_task_id',
@@ -34,10 +36,15 @@ class Task extends Model
             if (!$task->user_id) {
                 $task->user_id = auth()->id();
             }
+            
+            // Set task_state to null for subtasks (they inherit from parent)
+            if ($task->is_sub_task) {
+                $task->task_state = null;
+            }
         });
     }
 
-    // delete this if not needed later
+    // Auto set user_id
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
@@ -76,6 +83,27 @@ class Task extends Model
             'total' => $total,
             'percentage' => $percentage
         ];
+    }
+
+    // Get inherited task_state for subtasks, basically they inherit from parent
+    public function getTaskStateAttribute($value)
+    {
+        if ($this->is_sub_task && $this->parent_task_id) {
+            return Task::where('id', $this->parent_task_id)->value('task_state');
+        }
+        
+        return $value;
+    }
+
+    // Making sure subtaks cannot toggle their state
+    public function toggleTaskState()
+    {
+        if ($this->is_sub_task) {
+            return false;
+        }
+        
+        $this->task_state = $this->task_state === 'draft' ? 'published' : 'draft';
+        return $this->save();
     }
 
     // Progress only for main tasks

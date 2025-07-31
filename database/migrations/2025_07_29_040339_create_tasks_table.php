@@ -17,7 +17,9 @@ return new class extends Migration
             $table->id();
             $table->string('title');
             $table->text('content')->nullable();
+            $table->string('task_image')->nullable();
             $table->enum('status', ['to-do', 'in-progress', 'done'])->default('to-do');
+            $table->enum('task_state', ['draft', 'published'])->nullable()->default('draft');
             $table->timestamps();
 
             // User reference stuff

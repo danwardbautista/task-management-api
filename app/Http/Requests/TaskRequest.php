@@ -29,9 +29,11 @@ class TaskRequest extends FormRequest
             'status_filter' => 'nullable|string|in:to-do,in-progress,done',
 
             // Rules for Task controller
-            'title'    => $isCreating ? 'required|string|max:255' : 'sometimes|required|string|max:255',
-            'content'  => 'nullable|string',
-            'status'   => 'sometimes|required|string|in:to-do,in-progress,done',
+            'title'      => $isCreating ? 'required|string|max:255' : 'sometimes|required|string|max:255',
+            'content'    => 'nullable|string',
+            'task_image' => 'nullable|image|mimes:jpeg,jpg,png,gif,webp|max:4096',
+            'status'     => 'sometimes|required|string|in:to-do,in-progress,done',
+            'task_state' => 'sometimes|string|in:draft,published',
         ];
     }
 
@@ -41,7 +43,11 @@ class TaskRequest extends FormRequest
         return [
             'title.required' => 'Task title is required.',
             'title.max' => 'Task title cannot exceed 255 characters.',
+            'task_image.image' => 'Attachment must be an image file.',
+            'task_image.mimes' => 'Attachment must be a JPEG, JPG, PNG, GIF, or WebP format.',
+            'task_image.max' => 'Attachment cannot exceed 4MB.',
             'status.in' => 'Status must be one of: to-do, in-progress, done.',
+            'task_state.in' => 'Task state must be either draft or published.',
             'search.max' => 'Search term cannot exceed 100 characters.',
             'search.regex' => 'Search term contains invalid characters.',
             'sort_by.in' => 'Sort field must be either title or created_at.',

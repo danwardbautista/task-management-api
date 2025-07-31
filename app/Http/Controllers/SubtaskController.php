@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use App\Http\Requests\SubtaskRequest;
 use App\Http\Responses\ApiResponse;
 use App\Services\AuditLogger;
@@ -94,14 +95,21 @@ class SubtaskController extends Controller
                 return ApiResponse::error('Cannot create subtask under another subtask. Subtasks can only be created under main tasks.', null, 422);
             }
 
-            // Create subtask with validated data, user_id auto set by model
-            $subtask = Task::create([
+            $subtaskData = [
                 'title'          => $request->input('title'),
                 'content'        => $request->input('content'),
                 'status'         => $request->input('status', 'to-do'),
                 'is_sub_task'    => true,
                 'parent_task_id' => $taskId,
-            ]);
+            ];
+
+            // Handle image upload if present
+            if ($request->hasFile('task_image')) {
+                $subtaskData['task_image'] = $request->file('task_image')->store('task_images', 'public');
+            }
+
+            // Create subtask with validated data, user_id auto set by model
+            $subtask = Task::create($subtaskData);
 
             $this->auditLogger->logSuccess('subtasks.store', ['parent_task_id' => $taskId, 'subtask_id' => $subtask->id, 'title' => $subtask->title]);
 
@@ -136,11 +144,28 @@ class SubtaskController extends Controller
             }
 
             // Update subtask fields except user_id and parent_task_id to prevent ownership changes
-            $subtask->update([
+            $updateData = [
                 'title'   => $request->input('title', $subtask->title),
                 'content' => $request->input('content', $subtask->content),
                 'status'  => $request->input('status', $subtask->status),
-            ]);
+            ];
+
+            // Handle image upload or removal
+            if ($request->hasFile('task_image')) {
+                // Delete old image if exists
+                if ($subtask->task_image) {
+                    Storage::disk('public')->delete($subtask->task_image);
+                }
+                $updateData['task_image'] = $request->file('task_image')->store('task_images', 'public');
+            } elseif ($request->has('task_image') && $request->input('task_image') === null) {
+                // Delete file and set column to null
+                if ($subtask->task_image) {
+                    Storage::disk('public')->delete($subtask->task_image);
+                }
+                $updateData['task_image'] = null;
+            }
+
+            $subtask->update($updateData);
 
             // Check if parent task should auto complete when all subtasks are done
             $this->checkParentTaskCompletion($task);

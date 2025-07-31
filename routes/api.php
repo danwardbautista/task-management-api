@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\ImageController;
 use App\Http\Controllers\SubtaskController;
 use App\Http\Controllers\TaskController;
 use Illuminate\Http\Request;
@@ -61,4 +62,13 @@ Route::controller(SubtaskController::class)
         Route::get('/{subtask}', 'show')->name('show');
         Route::put('/{subtask}', 'update')->name('update');
         Route::delete('/{subtask}', 'destroy')->name('destroy');
+    });
+
+// Image route
+Route::controller(ImageController::class)
+    ->middleware('auth:sanctum')
+    ->prefix('images')
+    ->name('images.')
+    ->group(function () {
+        Route::get('/{filename}', 'show')->name('show');
     });

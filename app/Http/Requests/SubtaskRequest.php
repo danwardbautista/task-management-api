@@ -17,8 +17,9 @@ class SubtaskRequest extends FormRequest
 
         return [
             'title'   => $isCreating ? 'required|string|max:255' : 'sometimes|required|string|max:255',
-            'content' => 'nullable|string',
-            'status'  => 'sometimes|required|string|in:to-do,in-progress,done',
+            'content'   => 'nullable|string',
+            'task_image' => 'nullable|image|mimes:jpeg,jpg,png,gif,webp|max:4096',
+            'status'     => 'sometimes|required|string|in:to-do,in-progress,done',
         ];
     }
 
@@ -27,6 +28,9 @@ class SubtaskRequest extends FormRequest
         return [
             'title.required' => 'Subtask title is required.',
             'title.max' => 'Subtask title cannot exceed 255 characters.',
+            'task_image.image' => 'Attachment must be an image file.',
+            'task_image.mimes' => 'Attachment must be a JPEG, JPG, PNG, GIF, or WebP format.',
+            'task_image.max' => 'Attachment cannot exceed 4MB.',
             'status.in' => 'Status must be one of: to-do, in-progress, done.',
         ];
     }
