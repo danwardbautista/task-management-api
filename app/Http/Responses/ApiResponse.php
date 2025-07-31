@@ -20,7 +20,7 @@ class ApiResponse
             $response['data'] = $data;
         }
 
-        return response()->json($response, $statusCode);//decide later regarding http status code
+        return response()->json($response, $statusCode);
     }
 
     public static function error(string $message, mixed $errors = null, int $statusCode = 500): JsonResponse

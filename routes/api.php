@@ -18,21 +18,17 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
-    return $request->user();
-});
-
 // Auth routes group
 Route::controller(AuthController::class)
     ->prefix('auth')
     ->name('auth.')
     ->group(function () {
-        // Public auth
-        Route::post('/register', 'register')->name('register'); //decide later regarding rate limit
-        Route::post('/login', 'login')->name('login');
+        // Public auth with strict rate limiting
+        Route::post('/register', 'register')->name('register')->middleware('throttle:5,1'); // 5 attempts per minute
+        Route::post('/login', 'login')->name('login')->middleware('throttle:10,1'); // 10 attempts per minute
 
-        // Authenticated routes
-        Route::middleware('auth:sanctum')->group(function () {
+        // Authenticated routes with standard rate limiting
+        Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
             Route::post('/logout', 'logout')->name('logout');
             Route::get('/user', 'user')->name('user');
         });
@@ -40,7 +36,7 @@ Route::controller(AuthController::class)
 
 // Task routes group, added name prefix as well
 Route::controller(TaskController::class)
-    ->middleware('auth:sanctum')
+    ->middleware(['auth:sanctum', 'throttle:60,1'])
     ->prefix('tasks')
     ->name('tasks.')
     ->group(function () {
@@ -56,7 +52,7 @@ Route::controller(TaskController::class)
 
 // Subtask routes group
 Route::controller(SubtaskController::class)
-    ->middleware('auth:sanctum')
+    ->middleware(['auth:sanctum', 'throttle:60,1'])
     ->prefix('tasks/{task}/subtasks')
     ->name('subtasks.')
     ->group(function () {
@@ -72,7 +68,7 @@ Route::controller(SubtaskController::class)
 
 // Image route
 Route::controller(ImageController::class)
-    ->middleware('auth:sanctum')
+    ->middleware(['auth:sanctum', 'throttle:60,1'])
     ->prefix('images')
     ->name('images.')
     ->group(function () {

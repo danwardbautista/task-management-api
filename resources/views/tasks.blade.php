@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Task Management</title>
+    <!-- Refractor this with a modern JS soon, this is just quick dev for show -->
     <!-- CDN fast dev -->
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
@@ -25,6 +26,20 @@
 
     <!-- Main Content -->
     <main class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+        <!-- View Tabs -->
+        <div class="mb-6">
+            <div class="border-b border-gray-200">
+                <nav class="-mb-px flex space-x-8">
+                    <button id="activeTasksTab" class="py-2 px-1 border-b-2 font-medium text-sm border-blue-500 text-blue-600">
+                        Active Tasks
+                    </button>
+                    <button id="trashedTasksTab" class="py-2 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300">
+                        Trash
+                    </button>
+                </nav>
+            </div>
+        </div>
+
         <!-- Main search and filtering section -->
         <div class="bg-white p-4 rounded-lg shadow mb-6">
             <div class="flex flex-wrap gap-4 items-end">
@@ -70,7 +85,7 @@
         </div>
 
         <!-- Add Task Button -->
-        <div class="mb-6">
+        <div id="addTaskSection" class="mb-6">
             <button id="addTaskBtn" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700">
                 Add New Task
             </button>
@@ -90,6 +105,7 @@
             <table class="min-w-full divide-y divide-gray-200">
                 <thead class="bg-gray-50">
                     <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-8"></th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">Title</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Status</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">Progress</th>
@@ -120,13 +136,15 @@
         </div>
     </main>
 
-    <!-- Task create/edit modal overlay -->
+    <!-- Task/Subtask create/edit modal overlay -->
     <div id="taskModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
         <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-2xl max-h-screen overflow-y-auto">
             <h2 id="modalTitle" class="text-2xl font-bold mb-4">Add New Task</h2>
             
             <form id="taskForm" class="space-y-4">
                 <input type="hidden" id="taskId">
+                <input type="hidden" id="parentTaskId">
+                <input type="hidden" id="isSubtask" value="false">
                 
                 <div>
                     <label for="taskTitle" class="block text-sm font-medium text-gray-700 mb-1">Title</label>
@@ -158,7 +176,7 @@
                     </select>
                 </div>
                 
-                <div>
+                <div id="taskStateContainer">
                     <label for="taskState" class="block text-sm font-medium text-gray-700 mb-1">State</label>
                     <select id="taskState" name="task_state" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
                         <option value="draft">Draft</option>
@@ -256,6 +274,7 @@
     let totalPages = 1;
     let isEditing = false;
     let removeImageFlag = false; // tracks if user wants to remove current image
+    let currentView = 'active'; // 'active' or 'trash'
 
     // Utility functions
     function showError(message) {
@@ -341,10 +360,12 @@
         if (sortOrder) params.append('sort_order', sortOrder);
 
         try {
-            const { response, result } = await apiCall(`/tasks?${params}`);
+            // Choose endpoint based on current view
+            const endpoint = currentView === 'trash' ? `/tasks/trashed?${params}` : `/tasks?${params}`;
+            const { response, result } = await apiCall(endpoint);
 
             if (response.ok && result.success) {
-                displayTasks(result.data.data);
+                displayTasks(result.data.data || result.data);
                 updatePagination(result.data);
             } else {
                 showError(result.message || 'Failed to load tasks');
@@ -356,54 +377,120 @@
         }
     }
 
+    // Switch between active and trash views
+    function switchView(view) {
+        currentView = view;
+        currentPage = 1;
+        
+        // Update tab styling
+        const activeTab = document.getElementById('activeTasksTab');
+        const trashTab = document.getElementById('trashedTasksTab');
+        const addTaskSection = document.getElementById('addTaskSection');
+        
+        if (view === 'active') {
+            activeTab.className = 'py-2 px-1 border-b-2 font-medium text-sm border-blue-500 text-blue-600';
+            trashTab.className = 'py-2 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300';
+            addTaskSection.classList.remove('hidden');
+        } else {
+            activeTab.className = 'py-2 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300';
+            trashTab.className = 'py-2 px-1 border-b-2 font-medium text-sm border-blue-500 text-blue-600';
+            addTaskSection.classList.add('hidden');
+        }
+        
+        loadTasks();
+    }
+
     // Display tasks in table
     function displayTasks(tasks) {
         if (tasks.length === 0) {
-            tasksTable.innerHTML = '<tr><td colspan="6" class="px-6 py-4 text-center text-gray-500">No tasks found</td></tr>';
+            const message = currentView === 'trash' ? 'No trashed tasks found' : 'No tasks found';
+            tasksTable.innerHTML = `<tr><td colspan="7" class="px-6 py-4 text-center text-gray-500">${message}</td></tr>`;
             return;
         }
 
-        tasksTable.innerHTML = tasks.map(task => `
-            <tr>
-                <td class="px-6 py-4">
-                    <div class="text-sm font-medium text-gray-900 truncate max-w-xs" title="${task.title}">${task.title}</div>
-                    <div class="text-sm text-gray-500 truncate max-w-xs" title="${task.content || ''}">${task.content || ''}</div>
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap">
-                    ${getStatusBadge(task.status)}
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap">
-                    ${getProgressBar(task.progress)}
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    ${formatDate(task.created_at)}
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap">
-                    ${task.task_image ? 
-                        `<div class="w-8 h-8 bg-gray-200 rounded cursor-pointer flex items-center justify-center" 
-                              onclick="showImageModal('${task.task_image.split('/').pop()}')"
-                              data-filename="${task.task_image.split('/').pop()}"
-                              title="Click to view image">
-                            <span class="text-xs text-gray-500">IMG</span>
-                         </div>` : 
-                        '<span class="text-gray-400 text-xs">No image</span>'
-                    }
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <div class="flex space-x-2">
-                        <button onclick="editTask(${task.id})" class="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs hover:bg-blue-200 transition-colors">
-                            Edit
-                        </button>
-                        <button onclick="deleteTask(${task.id})" class="bg-red-100 text-red-700 px-2 py-1 rounded text-xs hover:bg-red-200 transition-colors">
-                            Delete
-                        </button>
-                        <button onclick="viewSubtasks(${task.id})" class="bg-green-100 text-green-700 px-2 py-1 rounded text-xs hover:bg-green-200 transition-colors">
-                            Subtasks
-                        </button>
-                    </div>
-                </td>
-            </tr>
-        `).join('');
+        tasksTable.innerHTML = tasks.map(task => {
+            const actionsHtml = currentView === 'trash' ? 
+                // Trash view actions
+                `<div class="flex space-x-2">
+                    <button onclick="restoreTask(${task.id})" class="bg-green-100 text-green-700 px-2 py-1 rounded text-xs hover:bg-green-200 transition-colors">
+                        Restore
+                    </button>
+                    <button onclick="permanentDeleteTask(${task.id})" class="bg-red-100 text-red-700 px-2 py-1 rounded text-xs hover:bg-red-200 transition-colors">
+                        Delete Forever
+                    </button>
+                </div>` :
+                // Active view actions
+                `<div class="flex space-x-2">
+                    <button onclick="editTask(${task.id})" class="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs hover:bg-blue-200 transition-colors">
+                        Edit
+                    </button>
+                    <button onclick="deleteTask(${task.id})" class="bg-red-100 text-red-700 px-2 py-1 rounded text-xs hover:bg-red-200 transition-colors">
+                        Delete
+                    </button>
+                </div>`;
+
+            const dateToShow = currentView === 'trash' ? 
+                `<div>
+                    <div class="text-xs text-gray-500">Created: ${formatDate(task.created_at)}</div>
+                    <div class="text-xs text-red-500">Deleted: ${formatDate(task.deleted_at)}</div>
+                </div>` :
+                formatDate(task.created_at);
+
+            // Determine if task has subtasks and show expand icon
+            const hasSubtasks = task.sub_tasks?.length > 0 || (task.progress && task.progress.total > 0);
+            const expandIcon = hasSubtasks ? 
+                `<button onclick="toggleSubtasks(${task.id})" class="text-gray-400 hover:text-gray-600 transition-colors">
+                    <svg id="expand-icon-${task.id}" class="w-4 h-4 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                    </svg>
+                </button>` :
+                '<div class="w-4 h-4"></div>';
+
+            return `
+                <tr class="${currentView === 'trash' ? 'bg-red-50' : ''}" id="task-row-${task.id}">
+                    <td class="px-6 py-4 text-center">
+                        ${expandIcon}
+                    </td>
+                    <td class="px-6 py-4">
+                        <div class="text-sm font-medium text-gray-900 truncate max-w-xs" title="${task.title}">${task.title}</div>
+                        <div class="text-sm text-gray-500 truncate max-w-xs" title="${task.content || ''}">${task.content || ''}</div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        ${getStatusBadge(task.status)}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        ${currentView === 'trash' ? '<span class="text-gray-400 text-xs">-</span>' : getProgressBar(task.progress)}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        ${dateToShow}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        ${task.task_image ? 
+                            `<div class="w-8 h-8 bg-gray-200 rounded cursor-pointer flex items-center justify-center" 
+                                  onclick="showImageModal('${task.task_image.split('/').pop()}')"
+                                  data-filename="${task.task_image.split('/').pop()}"
+                                  title="Click to view image">
+                                <span class="text-xs text-gray-500">IMG</span>
+                             </div>` : 
+                            '<span class="text-gray-400 text-xs">No image</span>'
+                        }
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        ${actionsHtml}
+                    </td>
+                </tr>
+                <tr id="subtasks-row-${task.id}" class="hidden">
+                    <td colspan="7" class="px-6 py-2 bg-gray-50">
+                        <div id="subtasks-container-${task.id}">
+                            <div class="text-center text-gray-500 py-4">
+                                <div class="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-gray-400 mr-2"></div>
+                                Loading subtasks...
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
     }
 
     // Update pagination
@@ -454,14 +541,34 @@
     });
 
     document.getElementById('addTaskBtn').addEventListener('click', () => {
-        isEditing = false;
-        removeImageFlag = false;
-        modalTitle.textContent = 'Add New Task';
-        taskForm.reset();
-        document.getElementById('taskId').value = '';
-        document.getElementById('currentImage').classList.add('hidden');
-        taskModal.classList.remove('hidden');
+        openTaskModal('create', 'task');
     });
+
+    function openTaskModal(mode, type, taskId = null, parentTaskId = null) {
+        isEditing = mode === 'edit';
+        removeImageFlag = false;
+        
+        // Reset form and hidden fields
+        taskForm.reset();
+        document.getElementById('taskId').value = taskId || '';
+        document.getElementById('parentTaskId').value = parentTaskId || '';
+        document.getElementById('isSubtask').value = type === 'subtask' ? 'true' : 'false';
+        document.getElementById('currentImage').classList.add('hidden');
+        
+        // Set modal title and button text
+        if (type === 'subtask') {
+            modalTitle.textContent = mode === 'edit' ? 'Edit Subtask' : 'Add New Subtask';
+            document.getElementById('saveTask').textContent = mode === 'edit' ? 'Save Subtask' : 'Create Subtask';
+            // Hide task state field for subtasks
+            document.getElementById('taskStateContainer').style.display = 'none';
+        } else {
+            modalTitle.textContent = mode === 'edit' ? 'Edit Task' : 'Add New Task';
+            document.getElementById('saveTask').textContent = mode === 'edit' ? 'Save Task' : 'Create Task';
+            document.getElementById('taskStateContainer').style.display = 'block';
+        }
+        
+        taskModal.classList.remove('hidden');
+    }
 
     document.getElementById('cancelTask').addEventListener('click', () => {
         taskModal.classList.add('hidden');
@@ -486,7 +593,7 @@
         }
     });
 
-    // Task form with loading states
+    // Task/Subtask form with loading states
     taskForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         
@@ -497,6 +604,8 @@
         
         const formData = new FormData(taskForm);
         const taskId = document.getElementById('taskId').value;
+        const parentTaskId = document.getElementById('parentTaskId').value;
+        const isSubtaskForm = document.getElementById('isSubtask').value === 'true';
         
         // Handle explicit image removal case
         if (removeImageFlag && !formData.get('task_image').name) {
@@ -506,25 +615,46 @@
         try {
             let endpoint, method;
             
-            if (isEditing && taskId) {
-                endpoint = `/tasks/${taskId}`;
-                method = 'POST'; // Laravel method spoofing for file uploads
-                formData.append('_method', 'PUT');
+            if (isSubtaskForm) {
+                // Subtask operations
+                if (isEditing && taskId) {
+                    endpoint = `/tasks/${parentTaskId}/subtasks/${taskId}`;
+                    method = 'POST'; // Laravel method spoofing for file uploads
+                    formData.append('_method', 'PUT');
+                } else {
+                    endpoint = `/tasks/${parentTaskId}/subtasks`;
+                    method = 'POST';
+                }
             } else {
-                endpoint = '/tasks';
-                method = 'POST';
+                // Task operations
+                if (isEditing && taskId) {
+                    endpoint = `/tasks/${taskId}`;
+                    method = 'POST'; // Laravel method spoofing for file uploads
+                    formData.append('_method', 'PUT');
+                } else {
+                    endpoint = '/tasks';
+                    method = 'POST';
+                }
             }
 
             const { response, result } = await apiCall(endpoint, method, formData, true);
 
             if (response.ok && result.success) {
                 taskModal.classList.add('hidden');
-                loadTasks();
-                // Success feedback
-                showSuccess('Task saved successfully');
-                setTimeout(() => hideError(), 3000);
+                
+                if (isSubtaskForm) {
+                    // Reset cache and refresh subtasks and parent task
+                    const subtasksContainer = document.getElementById(`subtasks-container-${parentTaskId}`);
+                    subtasksContainer.dataset.loaded = 'false';
+                    await loadSubtasks(parentTaskId);
+                    loadTasks(true);
+                    showSuccess(isEditing ? 'Subtask updated successfully' : 'Subtask created successfully');
+                } else {
+                    loadTasks();
+                    showSuccess(isEditing ? 'Task updated successfully' : 'Task created successfully');
+                }
             } else {
-                showError(result.message || 'Failed to save task');
+                showError(result.message || `Failed to save ${isSubtaskForm ? 'subtask' : 'task'}`);
             }
         } catch (error) {
             showError('Network error. Please try again.');
@@ -542,11 +672,9 @@
             if (response.ok && result.success) {
                 const task = result.data;
                 
-                isEditing = true;
-                removeImageFlag = false;
-                modalTitle.textContent = 'Edit Task';
+                openTaskModal('edit', 'task', task.id);
                 
-                document.getElementById('taskId').value = task.id;
+                // Populate form fields
                 document.getElementById('taskTitle').value = task.title;
                 document.getElementById('taskContent').value = task.content || '';
                 document.getElementById('taskStatus').value = task.status;
@@ -572,8 +700,6 @@
                 } else {
                     document.getElementById('currentImage').classList.add('hidden');
                 }
-                
-                taskModal.classList.remove('hidden');
             }
         } catch (error) {
             showError('Failed to load task details');
@@ -588,6 +714,7 @@
                 const { response, result } = await apiCall(`/tasks/${id}`, 'DELETE');
                 
                 if (response.ok && result.success) {
+                    showSuccess('Task moved to trash successfully');
                     loadTasks();
                 } else {
                     showError(result.message || 'Failed to delete task');
@@ -598,10 +725,196 @@
         }
     };
 
-    window.viewSubtasks = (id) => {
-        // TODO: implement subtasks view
-        alert(`Sub task`);
+    window.restoreTask = async (id) => {
+        const confirmRestore = confirm('Are you sure you want to restore this task?');
+        if (confirmRestore) {
+            try {
+                const { response, result } = await apiCall(`/tasks/${id}/restore`, 'PATCH');
+                
+                if (response.ok && result.success) {
+                    showSuccess('Task restored successfully');
+                    loadTasks();
+                } else {
+                    showError(result.message || 'Failed to restore task');
+                }
+            } catch (error) {
+                showError('Network error. Please try again.');
+            }
+        }
     };
+
+    window.permanentDeleteTask = async (id) => {
+        const confirmDelete = confirm('Are you sure you want to permanently delete this task?\n\nThis action cannot be undone!');
+        if (confirmDelete) {
+            try {
+                const { response, result } = await apiCall(`/tasks/${id}/force-delete`, 'DELETE');
+                
+                if (response.ok && result.success) {
+                    showSuccess('Task permanently deleted');
+                    loadTasks();
+                } else {
+                    showError(result.message || 'Failed to permanently delete task');
+                }
+            } catch (error) {
+                showError('Network error. Please try again.');
+            }
+        }
+    };
+
+    // Toggle subtasks visibility
+    window.toggleSubtasks = async (taskId) => {
+        const subtasksRow = document.getElementById(`subtasks-row-${taskId}`);
+        const expandIcon = document.getElementById(`expand-icon-${taskId}`);
+        const subtasksContainer = document.getElementById(`subtasks-container-${taskId}`);
+
+        if (subtasksRow.classList.contains('hidden')) {
+            // Show subtasks
+            subtasksRow.classList.remove('hidden');
+            expandIcon.style.transform = 'rotate(90deg)';
+            
+            // Load subtasks if not already loaded
+            if (!subtasksContainer.dataset.loaded) {
+                await loadSubtasks(taskId);
+                subtasksContainer.dataset.loaded = 'true';
+            }
+        } else {
+            // Hide subtasks
+            subtasksRow.classList.add('hidden');
+            expandIcon.style.transform = 'rotate(0deg)';
+        }
+    };
+
+    // Load subtasks for a specific task
+    async function loadSubtasks(taskId) {
+        const subtasksContainer = document.getElementById(`subtasks-container-${taskId}`);
+        
+        try {
+            // Choose endpoint based on current view
+            const endpoint = currentView === 'trash' 
+                ? `/tasks/${taskId}/subtasks/trashed`
+                : `/tasks/${taskId}/subtasks`;
+            
+            const { response, result } = await apiCall(endpoint);
+
+            if (response.ok && result.success) {
+                displaySubtasks(taskId, result.data);
+            } else {
+                subtasksContainer.innerHTML = `
+                    <div class="text-center text-red-500 py-4">
+                        Failed to load subtasks: ${result.message || 'Unknown error'}
+                    </div>
+                `;
+            }
+        } catch (error) {
+            subtasksContainer.innerHTML = `
+                <div class="text-center text-red-500 py-4">
+                    Network error while loading subtasks. Please try again.
+                </div>
+            `;
+        }
+    }
+
+    // Display subtasks within the expanded row
+    function displaySubtasks(taskId, subtasks) {
+        const subtasksContainer = document.getElementById(`subtasks-container-${taskId}`);
+        
+        if (subtasks.length === 0) {
+            const message = currentView === 'trash' ? 'No trashed subtasks' : 'No subtasks found';
+            const addSubtaskButton = currentView === 'active' ? 
+                `<div class="mt-3 pt-3 border-t border-gray-200">
+                    <button onclick="openSubtaskModal(${taskId})" class="bg-purple-100 text-purple-700 px-3 py-2 rounded text-sm hover:bg-purple-200 transition-colors">
+                        + Add Subtask
+                    </button>
+                </div>` : '';
+            
+            subtasksContainer.innerHTML = `
+                <div class="py-2">
+                    <div class="text-center text-gray-500 py-4 italic">
+                        ${message}
+                    </div>
+                    ${addSubtaskButton}
+                </div>
+            `;
+            return;
+        }
+
+        const subtasksHtml = subtasks.map(subtask => {
+            const subtaskActions = currentView === 'trash' ?
+                `<div class="flex space-x-1">
+                    <button onclick="restoreSubtask(${taskId}, ${subtask.id})" class="bg-green-100 text-green-600 px-2 py-1 rounded text-xs hover:bg-green-200 transition-colors">
+                        Restore
+                    </button>
+                    <button onclick="permanentDeleteSubtask(${taskId}, ${subtask.id})" class="bg-red-100 text-red-600 px-2 py-1 rounded text-xs hover:bg-red-200 transition-colors">
+                        Delete Forever
+                    </button>
+                </div>` :
+                `<div class="flex space-x-1">
+                    <button onclick="editSubtask(${taskId}, ${subtask.id})" class="bg-blue-100 text-blue-600 px-2 py-1 rounded text-xs hover:bg-blue-200 transition-colors">
+                        Edit
+                    </button>
+                    <button onclick="deleteSubtask(${taskId}, ${subtask.id})" class="bg-red-100 text-red-600 px-2 py-1 rounded text-xs hover:bg-red-200 transition-colors">
+                        Delete
+                    </button>
+                </div>`;
+
+            const dateToShow = currentView === 'trash' ?
+                `<div class="text-xs">
+                    <div class="text-gray-500">Created: ${formatDate(subtask.created_at)}</div>
+                    <div class="text-red-500">Deleted: ${formatDate(subtask.deleted_at)}</div>
+                </div>` :
+                `<div class="text-xs text-gray-500">${formatDate(subtask.created_at)}</div>`;
+
+            return `
+                <div class="${currentView === 'trash' ? 'bg-red-25' : 'bg-white'} border border-gray-200 rounded p-3 mb-2">
+                    <div class="flex items-start justify-between">
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center space-x-2 mb-1">
+                                <span class="inline-block w-2 h-2 bg-blue-400 rounded-full"></span>
+                                <div class="text-sm font-medium text-gray-900 truncate" title="${subtask.title}">
+                                    ${subtask.title}
+                                </div>
+                                <div class="flex-shrink-0">
+                                    ${getStatusBadge(subtask.status)}
+                                </div>
+                            </div>
+                            ${subtask.content ? `<div class="text-sm text-gray-600 truncate mb-2" title="${subtask.content}">${subtask.content}</div>` : ''}
+                            <div class="flex items-center space-x-4">
+                                ${dateToShow}
+                                ${subtask.task_image ? 
+                                    `<div class="flex items-center space-x-1">
+                                        <span class="text-xs text-gray-500">IMG</span>
+                                        <button onclick="showImageModal('${subtask.task_image.split('/').pop()}')" class="text-xs text-blue-600 hover:underline">
+                                            View Image
+                                        </button>
+                                    </div>` : ''
+                                }
+                            </div>
+                        </div>
+                        <div class="flex-shrink-0 ml-4">
+                            ${subtaskActions}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        const addSubtaskButton = currentView === 'active' ? 
+            `<div class="mt-3 pt-3 border-t border-gray-200">
+                <button onclick="openSubtaskModal(${taskId})" class="bg-purple-100 text-purple-700 px-3 py-2 rounded text-sm hover:bg-purple-200 transition-colors">
+                    + Add Subtask
+                </button>
+            </div>` : '';
+
+        subtasksContainer.innerHTML = `
+            <div class="py-2">
+                <div class="text-sm font-medium text-gray-700 mb-3 border-b border-gray-200 pb-2">
+                    Subtasks (${subtasks.length})
+                </div>
+                ${subtasksHtml}
+                ${addSubtaskButton}
+            </div>
+        `;
+    }
 
     // Image modal for table thumbnails
     window.showImageModal = async (filename) => {
@@ -635,6 +948,124 @@
             showError('Failed to load image');
         }
     };
+
+    // Subtask action functions
+    window.deleteSubtask = async (taskId, subtaskId) => {
+        const confirmDelete = confirm('Are you sure you want to delete this subtask?\n\nThis will move it to trash.');
+        if (confirmDelete) {
+            try {
+                const { response, result } = await apiCall(`/tasks/${taskId}/subtasks/${subtaskId}`, 'DELETE');
+                
+                if (response.ok && result.success) {
+                    showSuccess('Subtask moved to trash successfully');
+                    // Reset cache and reload subtasks
+                    const subtasksContainer = document.getElementById(`subtasks-container-${taskId}`);
+                    subtasksContainer.dataset.loaded = 'false';
+                    await loadSubtasks(taskId);
+                    loadTasks(true); // Refresh to update progress
+                } else {
+                    showError(result.message || 'Failed to delete subtask');
+                }
+            } catch (error) {
+                showError('Network error. Please try again.');
+            }
+        }
+    };
+
+    window.restoreSubtask = async (taskId, subtaskId) => {
+        const confirmRestore = confirm('Are you sure you want to restore this subtask?');
+        if (confirmRestore) {
+            try {
+                const { response, result } = await apiCall(`/tasks/${taskId}/subtasks/${subtaskId}/restore`, 'PATCH');
+                
+                if (response.ok && result.success) {
+                    showSuccess('Subtask restored successfully');
+                    const subtasksContainer = document.getElementById(`subtasks-container-${taskId}`);
+                    subtasksContainer.dataset.loaded = 'false';
+                    await loadSubtasks(taskId);
+                    loadTasks(true);
+                } else {
+                    showError(result.message || 'Failed to restore subtask');
+                }
+            } catch (error) {
+                showError('Network error. Please try again.');
+            }
+        }
+    };
+
+    window.permanentDeleteSubtask = async (taskId, subtaskId) => {
+        const confirmDelete = confirm('Are you sure you want to permanently delete this subtask?\n\nThis action cannot be undone!');
+        if (confirmDelete) {
+            try {
+                const { response, result } = await apiCall(`/tasks/${taskId}/subtasks/${subtaskId}/force-delete`, 'DELETE');
+                
+                if (response.ok && result.success) {
+                    showSuccess('Subtask permanently deleted');
+                    const subtasksContainer = document.getElementById(`subtasks-container-${taskId}`);
+                    subtasksContainer.dataset.loaded = 'false';
+                    await loadSubtasks(taskId);
+                    loadTasks(true);
+                } else {
+                    showError(result.message || 'Failed to permanently delete subtask');
+                }
+            } catch (error) {
+                showError('Network error. Please try again.');
+            }
+        }
+    };
+
+    window.editSubtask = async (taskId, subtaskId) => {
+        try {
+            const { response, result } = await apiCall(`/tasks/${taskId}/subtasks/${subtaskId}`);
+            
+            if (response.ok && result.success) {
+                const subtask = result.data;
+                
+                openTaskModal('edit', 'subtask', subtask.id, taskId);
+                
+                // Populate form fields
+                document.getElementById('taskTitle').value = subtask.title;
+                document.getElementById('taskContent').value = subtask.content || '';
+                document.getElementById('taskStatus').value = subtask.status;
+                
+                // Handle current image with auth headers
+                if (subtask.task_image) {
+                    const imagePreview = document.getElementById('currentImagePreview');
+                    const filename = subtask.task_image.split('/').pop();
+                    
+                    // Load image with auth token
+                    fetch(`/api/images/${filename}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    })
+                    .then(response => response.blob())
+                    .then(blob => {
+                        imagePreview.src = URL.createObjectURL(blob);
+                        document.getElementById('currentImage').classList.remove('hidden');
+                    })
+                    .catch(() => {
+                        document.getElementById('currentImage').classList.add('hidden');
+                    });
+                } else {
+                    document.getElementById('currentImage').classList.add('hidden');
+                }
+            }
+        } catch (error) {
+            showError('Failed to load subtask details');
+        }
+    };
+
+    window.openSubtaskModal = async (taskId) => {
+        openTaskModal('create', 'subtask', null, taskId);
+    };
+
+    // Tab event listeners
+    document.getElementById('activeTasksTab').addEventListener('click', () => {
+        switchView('active');
+    });
+
+    document.getElementById('trashedTasksTab').addEventListener('click', () => {
+        switchView('trash');
+    });
 
     // Load initial data on page load
     loadTasks();

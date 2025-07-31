@@ -53,7 +53,7 @@ class AuthController extends Controller
             $email = $request->input('email');
             $password = $request->input('password');
             
-            // Cache for failed login attempts this is temporary solution, decide later if want to use database or remove this altogether
+            // 
             $attemptKey = 'login_attempts_' . hash('sha256', $request->ip() . $email);
             
             // Find user by email
@@ -131,7 +131,7 @@ class AuthController extends Controller
     public function logout(Request $request)
     {
         try {
-            // Revoke current access token, decide later if want to delete all tokens
+            // Revoke current access token
             $user = $request->user();
             $user->currentAccessToken()->delete();
 

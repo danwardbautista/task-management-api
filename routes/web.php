@@ -24,3 +24,7 @@ Route::get('/login', function () {
 Route::get('/tasks', function () {
     return view('tasks');
 });
+
+Route::get('/trash', function () {
+    return view('tasks');
+});

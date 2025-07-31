@@ -51,7 +51,7 @@ class User extends Authenticatable
         return $this->hasMany(Task::class);
     }
 
-    // Account locking stuff, decide later if needed
+    // Account locking stuff
     public function isLocked(): bool
     {
         return $this->locked_until && $this->locked_until > now();
