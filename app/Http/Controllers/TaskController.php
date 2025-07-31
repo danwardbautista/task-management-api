@@ -174,17 +174,168 @@ class TaskController extends Controller
                 return ApiResponse::error('Task not found or you do not have permission to access it.', null, 404);
             }
 
+            $deletedAt = now();
+
+            // Cascade delete children
+            $subtasksCount = $task->subTasks()->whereNull('deleted_at')->count();
+            if ($subtasksCount > 0) {
+                $task->subTasks()->whereNull('deleted_at')->update([
+                    'deleted_at' => $deletedAt,
+                ]);
+            }
+
+            // Delete the parent task
             $task->update([
-                'deleted_at' => now(),
+                'deleted_at' => $deletedAt,
             ]);
 
-            $this->auditLogger->logSuccess('tasks.destroy', ['task_id' => $task->id, 'title' => $task->title]);
+            $this->auditLogger->logSuccess('tasks.destroy', [
+                'task_id' => $task->id, 
+                'title' => $task->title,
+                'subtasks_deleted' => $subtasksCount
+            ]);
 
-            return ApiResponse::success('Task moved to trash successfully');
+            $message = $subtasksCount > 0 
+                ? "Task and {$subtasksCount} subtasks moved to trash successfully"
+                : 'Task moved to trash successfully';
+
+            return ApiResponse::success($message);
         } catch (\Exception $e) {
             $this->auditLogger->logError('tasks.destroy', $e, ['task_id' => $taskId]);
 
             return ApiResponse::error('Unable to delete task. Please try again later.');
+        }
+    }
+
+    public function trashed()
+    {
+        try {
+            $query = Task::query()
+                ->where('user_id', auth()->id())
+                ->whereNotNull('deleted_at')
+                ->whereNull('permanent_delete_at')
+                ->where('is_sub_task', false)
+                ->orderBy('deleted_at', 'desc');
+
+            $trashedTasks = $query->with(['subTasks' => function($query) {
+                $query->whereNotNull('deleted_at')->whereNull('permanent_delete_at');
+            }])->paginate(10);
+
+            $this->auditLogger->logSuccess('tasks.trashed', ['count' => $trashedTasks->count()]);
+
+            return ApiResponse::success('Trashed tasks retrieved successfully', $trashedTasks);
+
+        } catch (\Exception $e) {
+            $this->auditLogger->logError('tasks.trashed', $e);
+
+            return ApiResponse::error('Unable to retrieve trashed tasks. Please try again later.');
+        }
+    }
+
+    public function restore($taskId)
+    {
+        try {
+            $task = Task::where('id', $taskId)
+                ->where('user_id', auth()->id())
+                ->whereNotNull('deleted_at')
+                ->whereNull('permanent_delete_at')
+                ->first();
+            
+            if (!$task) {
+                return ApiResponse::error('Trashed task not found or you do not have permission to access it.', null, 404);
+            }
+
+            // Cascade restore: also restore all related subtasks that were deleted
+            $subtasksCount = $task->subTasks()
+                ->whereNotNull('deleted_at')
+                ->whereNull('permanent_delete_at')
+                ->count();
+            
+            if ($subtasksCount > 0) {
+                $task->subTasks()
+                    ->whereNotNull('deleted_at')
+                    ->whereNull('permanent_delete_at')
+                    ->update(['deleted_at' => null]);
+            }
+
+            // Restore the parent task
+            $task->update([
+                'deleted_at' => null,
+            ]);
+
+            $this->auditLogger->logSuccess('tasks.restore', [
+                'task_id' => $task->id, 
+                'title' => $task->title,
+                'subtasks_restored' => $subtasksCount
+            ]);
+
+            $message = $subtasksCount > 0 
+                ? "Task and {$subtasksCount} subtasks restored successfully"
+                : 'Task restored successfully';
+
+            return ApiResponse::success($message, $task);
+
+        } catch (\Exception $e) {
+            $this->auditLogger->logError('tasks.restore', $e, ['task_id' => $taskId]);
+
+            return ApiResponse::error('Unable to restore task. Please try again later.');
+        }
+    }
+
+    public function forceDelete($taskId)
+    {
+        try {
+            $task = Task::where('id', $taskId)
+                ->where('user_id', auth()->id())
+                ->whereNotNull('deleted_at')
+                ->whereNull('permanent_delete_at')
+                ->first();
+            
+            if (!$task) {
+                return ApiResponse::error('Trashed task not found or you do not have permission to access it.', null, 404);
+            }
+
+            // Get subtasks to delete and count them
+            $subtasksToDelete = $task->subTasks()->whereNotNull('deleted_at')->whereNull('permanent_delete_at')->get();
+            $subtasksCount = $subtasksToDelete->count();
+
+            // Delete images from all subtasks
+            foreach ($subtasksToDelete as $subtask) {
+                if ($subtask->task_image) {
+                    Storage::disk('public')->delete($subtask->task_image);
+                }
+            }
+
+            // Also permanently delete all subtasks
+            $task->subTasks()->whereNotNull('deleted_at')->update([
+                'permanent_delete_at' => now(),
+            ]);
+
+            // Delete task image if exists
+            if ($task->task_image) {
+                Storage::disk('public')->delete($task->task_image);
+            }
+
+            $task->update([
+                'permanent_delete_at' => now(),
+            ]);
+
+            $this->auditLogger->logSuccess('tasks.force_delete', [
+                'task_id' => $task->id, 
+                'title' => $task->title,
+                'subtasks_permanently_deleted' => $subtasksCount
+            ]);
+
+            $message = $subtasksCount > 0 
+                ? "Task and {$subtasksCount} subtasks permanently deleted successfully"
+                : 'Task permanently deleted successfully';
+
+            return ApiResponse::success($message);
+
+        } catch (\Exception $e) {
+            $this->auditLogger->logError('tasks.force_delete', $e, ['task_id' => $taskId]);
+
+            return ApiResponse::error('Unable to permanently delete task. Please try again later.');
         }
     }
 }

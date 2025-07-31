@@ -12,7 +12,8 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule): void
     {
-        // $schedule->command('inspire')->hourly();
+        // Clean up trashed tasks older than 30 days, runs daily at 2:00 AM
+        $schedule->job(new \App\Jobs\CleanupTrashedTasks())->dailyAt('02:00');
     }
 
     /**

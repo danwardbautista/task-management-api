@@ -46,9 +46,12 @@ Route::controller(TaskController::class)
     ->group(function () {
         Route::get('/', 'index')->name('index');
         Route::post('/', 'store')->name('store');
+        Route::get('/trashed', 'trashed')->name('trashed');
         Route::get('/{task}', 'show')->name('show');
         Route::put('/{task}', 'update')->name('update');
         Route::delete('/{task}', 'destroy')->name('destroy');
+        Route::patch('/{task}/restore', 'restore')->name('restore');
+        Route::delete('/{task}/force-delete', 'forceDelete')->name('force_delete');
     });
 
 // Subtask routes group
@@ -59,9 +62,12 @@ Route::controller(SubtaskController::class)
     ->group(function () {
         Route::get('/', 'index')->name('index');
         Route::post('/', 'store')->name('store');
+        Route::get('/trashed', 'trashed')->name('trashed');
         Route::get('/{subtask}', 'show')->name('show');
         Route::put('/{subtask}', 'update')->name('update');
         Route::delete('/{subtask}', 'destroy')->name('destroy');
+        Route::patch('/{subtask}/restore', 'restore')->name('restore');
+        Route::delete('/{subtask}/force-delete', 'forceDelete')->name('force_delete');
     });
 
 // Image route

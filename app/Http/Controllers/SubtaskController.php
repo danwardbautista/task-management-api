@@ -220,6 +220,111 @@ class SubtaskController extends Controller
         }
     }
 
+    public function trashed($taskId)
+    {
+        try {
+            // Find parent task
+            $task = Task::where('id', $taskId)
+                ->where('user_id', auth()->id())
+                ->first();
+            
+            if (!$task) {
+                return ApiResponse::error('Task not found or you do not have permission to access it.', null, 404);
+            }
+
+            // Get trashed subtasks only
+            $trashedSubtasks = $task->subTasks()
+                ->whereNotNull('deleted_at')
+                ->whereNull('permanent_delete_at')
+                ->orderBy('deleted_at', 'desc')
+                ->get();
+
+            $this->auditLogger->logSuccess('subtasks.trashed', ['parent_task_id' => $taskId, 'count' => $trashedSubtasks->count()]);
+
+            return ApiResponse::success('Trashed subtasks retrieved successfully', $trashedSubtasks);
+            
+        } catch (\Exception $e) {
+            $this->auditLogger->logError('subtasks.trashed', $e, ['parent_task_id' => $taskId]);
+
+            return ApiResponse::error('Unable to retrieve trashed subtasks. Please try again later.');
+        }
+    }
+
+    public function restore($taskId, $subtaskId)
+    {
+        try {
+            // Verify parent task exists and user owns
+            $task = Task::where('id', $taskId)
+                ->where('user_id', auth()->id())
+                ->first();
+            
+            // Verify subtask exists under this parent task and is trashed
+            $subtask = Task::where('id', $subtaskId)
+                ->where('parent_task_id', $taskId)
+                ->whereNotNull('deleted_at')
+                ->whereNull('permanent_delete_at')
+                ->first();
+            
+            if (!$task || !$subtask) {
+                return ApiResponse::error('Trashed subtask not found or you do not have permission to access it.', null, 404);
+            }
+
+            $subtask->update([
+                'deleted_at' => null,
+            ]);
+
+            // Check if parent task should auto complete when all subtasks are done
+            $this->checkParentTaskCompletion($task);
+
+            $this->auditLogger->logSuccess('subtasks.restore', ['task_id' => $taskId, 'subtask_id' => $subtaskId, 'title' => $subtask->title]);
+
+            return ApiResponse::success('Subtask restored successfully', $subtask);
+            
+        } catch (\Exception $e) {
+            $this->auditLogger->logError('subtasks.restore', $e, ['task_id' => $taskId, 'subtask_id' => $subtaskId]);
+
+            return ApiResponse::error('Unable to restore subtask. Please try again later.');
+        }
+    }
+
+    public function forceDelete($taskId, $subtaskId)
+    {
+        try {
+            // Verify parent task exists and user owns
+            $task = Task::where('id', $taskId)
+                ->where('user_id', auth()->id())
+                ->first();
+            
+            // Verify subtask exists under this parent task and is trashed
+            $subtask = Task::where('id', $subtaskId)
+                ->where('parent_task_id', $taskId)
+                ->whereNotNull('deleted_at')
+                ->whereNull('permanent_delete_at')
+                ->first();
+            
+            if (!$task || !$subtask) {
+                return ApiResponse::error('Trashed subtask not found or you do not have permission to access it.', null, 404);
+            }
+
+            // Delete subtask image if exists
+            if ($subtask->task_image) {
+                Storage::disk('public')->delete($subtask->task_image);
+            }
+
+            $subtask->update([
+                'permanent_delete_at' => now(),
+            ]);
+
+            $this->auditLogger->logSuccess('subtasks.force_delete', ['task_id' => $taskId, 'subtask_id' => $subtaskId, 'title' => $subtask->title]);
+
+            return ApiResponse::success('Subtask permanently deleted successfully');
+        } catch (\Exception $e) {
+            $this->auditLogger->logError('subtasks.force_delete', $e, ['task_id' => $taskId, 'subtask_id' => $subtaskId]);
+
+            return ApiResponse::error('Unable to permanently delete subtask. Please try again later.');
+        }
+    }
+
     private function checkParentTaskCompletion(Task $task)
     {
         // Get all active subtasks for this parent task
