@@ -16,8 +16,8 @@ class SubtaskRequest extends FormRequest
         $isCreating = $this->isMethod('POST');
 
         return [
-            'title'   => $isCreating ? 'required|string|max:255' : 'sometimes|required|string|max:255',
-            'content'   => 'nullable|string',
+            'title'      => $isCreating ? 'required|string|max:100' : 'sometimes|required|string|max:100',
+            'content'    => 'required|string',
             'task_image' => 'nullable|image|mimes:jpeg,jpg,png,gif,webp|max:4096',
             'status'     => 'sometimes|required|string|in:to-do,in-progress,done',
         ];
@@ -27,7 +27,8 @@ class SubtaskRequest extends FormRequest
     {
         return [
             'title.required' => 'Subtask title is required.',
-            'title.max' => 'Subtask title cannot exceed 255 characters.',
+            'title.max' => 'Subtask title cannot exceed 100 characters.',
+            'content.required' => 'Subtask content is required.',
             'task_image.image' => 'Attachment must be an image file.',
             'task_image.mimes' => 'Attachment must be a JPEG, JPG, PNG, GIF, or WebP format.',
             'task_image.max' => 'Attachment cannot exceed 4MB.',

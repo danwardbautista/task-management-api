@@ -23,6 +23,7 @@
                     class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="Enter your email"
                 >
+                <div id="email-error" class="text-red-600 text-sm mt-1 hidden"></div>
             </div>
             
             <div>
@@ -35,6 +36,7 @@
                     class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="Enter your password"
                 >
+                <div id="password-error" class="text-red-600 text-sm mt-1 hidden"></div>
             </div>
             
             <button 
@@ -78,6 +80,7 @@
                         class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                         placeholder="Enter your name"
                     >
+                    <div id="regName-error" class="text-red-600 text-sm mt-1 hidden"></div>
                 </div>
                 
                 <div>
@@ -90,6 +93,7 @@
                         class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                         placeholder="Enter your email"
                     >
+                    <div id="regEmail-error" class="text-red-600 text-sm mt-1 hidden"></div>
                 </div>
                 
                 <div>
@@ -102,6 +106,7 @@
                         class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                         placeholder="Enter your password"
                     >
+                    <div id="regPassword-error" class="text-red-600 text-sm mt-1 hidden"></div>
                 </div>
                 
                 <div>
@@ -114,6 +119,7 @@
                         class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                         placeholder="Confirm your password"
                     >
+                    <div id="regPasswordConfirm-error" class="text-red-600 text-sm mt-1 hidden"></div>
                 </div>
                 
                 <button 
@@ -164,6 +170,53 @@
         successMessage.classList.add('hidden');
     }
 
+    // Field-level error handling
+    function showFieldError(fieldId, message) {
+        const errorElement = document.getElementById(`${fieldId}-error`);
+        const inputElement = document.getElementById(fieldId);
+        
+        if (errorElement && inputElement) {
+            errorElement.textContent = message;
+            errorElement.classList.remove('hidden');
+            inputElement.classList.add('border-red-500', 'focus:ring-red-500');
+            inputElement.classList.remove('border-gray-300', 'focus:ring-blue-500');
+        }
+    }
+
+    function hideFieldError(fieldId) {
+        const errorElement = document.getElementById(`${fieldId}-error`);
+        const inputElement = document.getElementById(fieldId);
+        
+        if (errorElement && inputElement) {
+            errorElement.classList.add('hidden');
+            inputElement.classList.remove('border-red-500', 'focus:ring-red-500');
+            inputElement.classList.add('border-gray-300', 'focus:ring-blue-500');
+        }
+    }
+
+    function clearAllFieldErrors(formType = 'login') {
+        const fields = formType === 'login' 
+            ? ['email', 'password']
+            : ['regName', 'regEmail', 'regPassword', 'regPasswordConfirm'];
+        
+        fields.forEach(field => hideFieldError(field));
+    }
+
+    function displayValidationErrors(errors, formType = 'login') {
+        // Clear existing field errors first
+        clearAllFieldErrors(formType);
+        
+        if (formType === 'login') {
+            if (errors.email) showFieldError('email', errors.email[0]);
+            if (errors.password) showFieldError('password', errors.password[0]);
+        } else {
+            if (errors.name) showFieldError('regName', errors.name[0]);
+            if (errors.email) showFieldError('regEmail', errors.email[0]);
+            if (errors.password) showFieldError('regPassword', errors.password[0]);
+            if (errors.password_confirmation) showFieldError('regPasswordConfirm', errors.password_confirmation[0]);
+        }
+    }
+
     // Generic API wrapper, handles auth headers and errors
     async function apiCall(endpoint, method = 'GET', data = null) {
         const config = {
@@ -188,6 +241,7 @@
     loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         hideMessages();
+        clearAllFieldErrors('login');
         
         const formData = new FormData(loginForm);
         const data = {
@@ -213,7 +267,12 @@
                     window.location.href = '/tasks';
                 }, 1000);
             } else {
-                showError(result.message || 'Login failed');
+                // Handle validation errors
+                if (response.status === 422 && result.errors) {
+                    displayValidationErrors(result.errors, 'login');
+                } else {
+                    showError(result.message || 'Login failed');
+                }
             }
         } catch (error) {
             showError('Network error. Please try again.');
@@ -227,13 +286,15 @@
     registerForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         hideMessages();
+        clearAllFieldErrors('register');
         
         const formData = new FormData(registerForm);
         const password = formData.get('password');
         const passwordConfirm = formData.get('password_confirmation');
         
+        // Client-side password match check
         if (password !== passwordConfirm) {
-            showError('Passwords do not match');
+            showFieldError('regPasswordConfirm', 'Passwords do not match');
             return;
         }
 
@@ -263,7 +324,12 @@
                     window.location.href = '/tasks';
                 }, 1000);
             } else {
-                showError(result.message || 'Registration failed');
+                // Handle validation errors
+                if (response.status === 422 && result.errors) {
+                    displayValidationErrors(result.errors, 'register');
+                } else {
+                    showError(result.message || 'Registration failed');
+                }
             }
         } catch (error) {
             showError('Network error. Please try again.');
@@ -273,17 +339,35 @@
         }
     });
 
+    // Clear field errors on input
+    function addInputClearErrorListeners() {
+        // Login form fields
+        document.getElementById('email').addEventListener('input', () => hideFieldError('email'));
+        document.getElementById('password').addEventListener('input', () => hideFieldError('password'));
+        
+        // Register form fields
+        document.getElementById('regName').addEventListener('input', () => hideFieldError('regName'));
+        document.getElementById('regEmail').addEventListener('input', () => hideFieldError('regEmail'));
+        document.getElementById('regPassword').addEventListener('input', () => hideFieldError('regPassword'));
+        document.getElementById('regPasswordConfirm').addEventListener('input', () => hideFieldError('regPasswordConfirm'));
+    }
+
     // Modal handlers
     showRegister.addEventListener('click', (e) => {
         e.preventDefault();
         registerModal.classList.remove('hidden');
         hideMessages();
+        clearAllFieldErrors('register');
     });
 
     closeRegister.addEventListener('click', () => {
         registerModal.classList.add('hidden');
         registerForm.reset();
+        clearAllFieldErrors('register');
     });
+
+    // Initialize input listeners
+    addInputClearErrorListeners();
 
     // Skip login if already authenticated 
     if (localStorage.getItem('auth_token')) {

@@ -121,17 +121,43 @@
         </div>
 
         <!-- Pagination -->
-        <div id="pagination" class="mt-6 flex justify-between items-center">
-            <div class="text-sm text-gray-700">
-                Showing <span id="pageInfo"></span>
-            </div>
-            <div class="flex space-x-2">
-                <button id="prevPage" class="px-3 py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50">
-                    Previous
-                </button>
-                <button id="nextPage" class="px-3 py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50">
-                    Next
-                </button>
+        <div id="pagination" class="mt-6">
+            <div class="flex flex-col sm:flex-row justify-between items-center gap-4">
+                <div class="flex items-center space-x-4">
+                    <div class="text-sm text-gray-700">
+                        Showing <span id="pageInfo"></span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <label for="perPage" class="text-sm text-gray-700">Items per page:</label>
+                        <select id="perPage" class="px-2 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="10">10</option>
+                            <option value="20">20</option>
+                            <option value="50">50</option>
+                            <option value="70">70</option>
+                            <option value="100">100</option>
+                            <option value="custom">Custom</option>
+                        </select>
+                        <input 
+                            type="number" 
+                            id="customPerPage" 
+                            placeholder="Enter number" 
+                            min="1" 
+                            max="100" 
+                            class="px-2 py-1 border border-gray-300 rounded-md text-sm w-24 focus:outline-none focus:ring-2 focus:ring-blue-500 hidden"
+                        >
+                    </div>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <button id="prevPage" class="px-3 py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 text-sm">
+                        Previous
+                    </button>
+                    <div id="pageNumbers" class="flex space-x-1">
+                        <!-- Page numbers will be populated here -->
+                    </div>
+                    <button id="nextPage" class="px-3 py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 text-sm">
+                        Next
+                    </button>
+                </div>
             </div>
         </div>
     </main>
@@ -268,6 +294,9 @@
     const pageInfo = document.getElementById('pageInfo');
     const prevPage = document.getElementById('prevPage');
     const nextPage = document.getElementById('nextPage');
+    const pageNumbers = document.getElementById('pageNumbers');
+    const perPageSelect = document.getElementById('perPage');
+    const customPerPageInput = document.getElementById('customPerPage');
 
     // Global state management
     let currentPage = 1;
@@ -275,6 +304,42 @@
     let isEditing = false;
     let removeImageFlag = false; // tracks if user wants to remove current image
     let currentView = 'active'; // 'active' or 'trash'
+
+    // Pagination preferences management
+    function savePaginationPrefs() {
+        const prefs = {
+            perPageSelect: perPageSelect.value,
+            customValue: customPerPageInput.value
+        };
+        localStorage.setItem('task_pagination_prefs', JSON.stringify(prefs));
+    }
+
+    function loadPaginationPrefs() {
+        try {
+            const saved = localStorage.getItem('task_pagination_prefs');
+            if (saved) {
+                const prefs = JSON.parse(saved);
+                
+                // Restore per page selection
+                if (prefs.perPageSelect) {
+                    perPageSelect.value = prefs.perPageSelect;
+                }
+                
+                // Restore custom value and show input if needed
+                if (prefs.customValue) {
+                    customPerPageInput.value = prefs.customValue;
+                }
+                
+                // Show custom input if custom is selected
+                if (perPageSelect.value === 'custom') {
+                    customPerPageInput.classList.remove('hidden');
+                }
+            }
+        } catch (e) {
+            // If there's an error, just use defaults
+            console.warn('Could not load pagination preferences:', e);
+        }
+    }
 
     // Utility functions
     function showError(message) {
@@ -343,9 +408,16 @@
         if (!skipLoading) showLoading();
         hideError();
 
+        let perPage = perPageSelect.value === 'custom' ? 
+            (parseInt(customPerPageInput.value) || 10) : 
+            (parseInt(perPageSelect.value) || 10);
+        
+        // Ensure perPage is within bounds
+        perPage = Math.min(Math.max(perPage, 1), 100);
+        
         const params = new URLSearchParams({
             page: currentPage,
-            per_page: 10
+            per_page: perPage
         });
 
         // Build query params from form inputs
@@ -502,6 +574,73 @@
         
         prevPage.disabled = currentPage <= 1;
         nextPage.disabled = currentPage >= totalPages;
+        
+        // Generate page numbers
+        generatePageNumbers();
+    }
+
+    // Generate numbered pagination buttons
+    function generatePageNumbers() {
+        pageNumbers.innerHTML = '';
+        
+        if (totalPages <= 1) return;
+        
+        // Calculate which pages to show
+        let startPage = Math.max(1, currentPage - 2);
+        let endPage = Math.min(totalPages, currentPage + 2);
+        
+        // Adjust if we're near the beginning or end
+        if (currentPage <= 3) {
+            endPage = Math.min(5, totalPages);
+        }
+        if (currentPage >= totalPages - 2) {
+            startPage = Math.max(1, totalPages - 4);
+        }
+        
+        // Add first page and ellipsis if needed
+        if (startPage > 1) {
+            addPageButton(1);
+            if (startPage > 2) {
+                addEllipsis();
+            }
+        }
+        
+        // Add page numbers
+        for (let i = startPage; i <= endPage; i++) {
+            addPageButton(i);
+        }
+        
+        // Add ellipsis and last page if needed
+        if (endPage < totalPages) {
+            if (endPage < totalPages - 1) {
+                addEllipsis();
+            }
+            addPageButton(totalPages);
+        }
+    }
+
+    function addPageButton(pageNum) {
+        const button = document.createElement('button');
+        button.textContent = pageNum;
+        button.className = currentPage === pageNum 
+            ? 'px-3 py-2 bg-blue-600 text-white border border-blue-600 rounded-md text-sm'
+            : 'px-3 py-2 bg-white text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 text-sm';
+        
+        button.addEventListener('click', () => {
+            if (currentPage !== pageNum) {
+                currentPage = pageNum;
+                loadTasks();
+            }
+        });
+        
+        pageNumbers.appendChild(button);
+    }
+
+    function addEllipsis() {
+        const ellipsis = document.createElement('span');
+        ellipsis.textContent = '...';
+        ellipsis.className = 'px-3 py-2 text-gray-500 text-sm';
+        pageNumbers.appendChild(ellipsis);
     }
 
     // Event Listeners
@@ -591,6 +730,51 @@
             currentPage++;
             loadTasks();
         }
+    });
+
+    // Items per page change event
+    perPageSelect.addEventListener('change', () => {
+        if (perPageSelect.value === 'custom') {
+            customPerPageInput.classList.remove('hidden');
+            customPerPageInput.focus();
+        } else {
+            customPerPageInput.classList.add('hidden');
+            currentPage = 1; // Reset to first page when changing items per page
+            loadTasks();
+        }
+        // Save preference
+        savePaginationPrefs();
+    });
+
+    // Custom per page input events
+    customPerPageInput.addEventListener('input', () => {
+        const value = parseInt(customPerPageInput.value);
+        if (value && value >= 1 && value <= 100) {
+            currentPage = 1;
+            loadTasks();
+            savePaginationPrefs(); // Save on valid input
+        }
+    });
+
+    customPerPageInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            const value = parseInt(customPerPageInput.value);
+            if (value && value >= 1 && value <= 100) {
+                currentPage = 1;
+                loadTasks();
+                savePaginationPrefs(); // Save on enter
+            }
+        }
+    });
+
+    customPerPageInput.addEventListener('blur', () => {
+        const value = parseInt(customPerPageInput.value);
+        if (!value || value < 1 || value > 100) {
+            customPerPageInput.value = 10; // Default to 10 if invalid
+        }
+        currentPage = 1;
+        loadTasks();
+        savePaginationPrefs(); // Save on blur
     });
 
     // Task/Subtask form with loading states
@@ -1068,6 +1252,7 @@
     });
 
     // Load initial data on page load
+    loadPaginationPrefs(); // Restore saved preferences first
     loadTasks();
     </script>
 </body>

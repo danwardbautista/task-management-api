@@ -207,7 +207,7 @@ class TaskController extends Controller
         }
     }
 
-    public function trashed()
+    public function trashed(TaskRequest $request)
     {
         try {
             $query = Task::query()
@@ -217,9 +217,10 @@ class TaskController extends Controller
                 ->where('is_sub_task', false)
                 ->orderBy('deleted_at', 'desc');
 
+            $perPage = $request->input('per_page', 10);
             $trashedTasks = $query->with(['subTasks' => function($query) {
                 $query->whereNotNull('deleted_at')->whereNull('permanent_delete_at');
-            }])->paginate(10);
+            }])->paginate($perPage);
 
             $this->auditLogger->logSuccess('tasks.trashed', ['count' => $trashedTasks->count()]);
 

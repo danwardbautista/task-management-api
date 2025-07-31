@@ -17,7 +17,7 @@ class TaskRequest extends FormRequest
     public function rules(): array
     {
         $isCreating = $this->isMethod('POST');
-        // $isUpdating = $this->isMethod('PUT') || $this->isMethod('PATCH');
+        $taskId = $this->route('task'); // Get task ID for update operations
 
         return [
 
@@ -28,9 +28,11 @@ class TaskRequest extends FormRequest
             'per_page'   => 'nullable|integer|min:1|max:100',
             'status_filter' => 'nullable|string|in:to-do,in-progress,done',
 
-            // Rules for Task controller
-            'title'      => $isCreating ? 'required|string|max:100' : 'sometimes|required|string|max:100',
-            'content'    => 'nullable|string',
+            // Rules for Task controller - title must be unique per user
+            'title'      => $isCreating 
+                ? 'required|string|max:100|unique:tasks,title,NULL,id,user_id,' . auth()->id() . ',deleted_at,NULL'
+                : 'sometimes|required|string|max:100|unique:tasks,title,' . $taskId . ',id,user_id,' . auth()->id() . ',deleted_at,NULL',
+            'content'    => 'required|string',
             'task_image' => 'nullable|image|mimes:jpeg,jpg,png,gif,webp|max:4096',
             'status'     => 'sometimes|required|string|in:to-do,in-progress,done',
             'task_state' => 'sometimes|string|in:draft,published',
@@ -43,6 +45,8 @@ class TaskRequest extends FormRequest
         return [
             'title.required' => 'Task title is required.',
             'title.max' => 'Task title cannot exceed 100 characters.',
+            'title.unique' => 'A task with this title already exists.',
+            'content.required' => 'Task content is required.',
             'task_image.image' => 'Attachment must be an image file.',
             'task_image.mimes' => 'Attachment must be a JPEG, JPG, PNG, GIF, or WebP format.',
             'task_image.max' => 'Attachment cannot exceed 4MB.',
