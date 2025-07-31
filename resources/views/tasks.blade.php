@@ -523,9 +523,8 @@
                 </div>` :
                 formatDate(task.created_at);
 
-            // Determine if task has subtasks and show expand icon
-            const hasSubtasks = task.sub_tasks?.length > 0 || (task.progress && task.progress.total > 0);
-            const expandIcon = hasSubtasks ? 
+            // Always show expand icon for active tasks to allow adding subtasks
+            const expandIcon = currentView === 'active' ? 
                 `<button onclick="toggleSubtasks(${task.id})" class="text-gray-400 hover:text-gray-600 transition-colors">
                     <svg id="expand-icon-${task.id}" class="w-4 h-4 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
